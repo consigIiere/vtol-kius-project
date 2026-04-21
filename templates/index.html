@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Наземна станція керування БПЛА</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans p-6">
+
+    <header class="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
+        <div>
+            <h1 class="text-3xl font-bold text-blue-400">Інтегрована КІУС</h1>
+            <p class="text-gray-400">Гібридний БПЛА літакового типу</p>
+        </div>
+        <div id="global-status" class="px-6 py-2 rounded text-xl font-bold bg-green-600 animate-pulse">
+            SYSTEM OK
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        
+        <div class="col-span-1 flex flex-col space-y-4">
+            <div class="bg-gray-800 p-4 rounded-lg shadow-lg border-l-4 border-blue-500">
+                <p class="text-gray-400 text-sm">Режим польоту</p>
+                <p id="val-mode" class="text-2xl font-bold">Очікування</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                <p class="text-gray-400 text-sm">Висота (м)</p>
+                <p id="val-alt" class="text-3xl font-bold text-cyan-400">0.0</p>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                <p class="text-gray-400 text-sm">Швидкість (км/год)</p>
+                <p id="val-speed" class="text-3xl font-bold text-purple-400">0.0</p>
+            </div>
+            <div id="card-battery" class="bg-gray-800 p-4 rounded-lg shadow-lg transition-colors duration-300">
+                <p class="text-gray-400 text-sm">Заряд батареї (%)</p>
+                <p id="val-battery" class="text-3xl font-bold text-green-400">100.0</p>
+            </div>
+            <div id="card-temp" class="bg-gray-800 p-4 rounded-lg shadow-lg transition-colors duration-300">
+                <p class="text-gray-400 text-sm">Температура моторів (°C)</p>
+                <p id="val-temp" class="text-3xl font-bold text-orange-400">40.0</p>
+            </div>
+        </div>
+
+        <div class="col-span-3 flex flex-col space-y-6">
+            
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-xl font-bold mb-4 text-gray-300">Командний інтерфейс (Uplink)</h2>
+                <div class="flex space-x-4">
+                    <button onclick="sendCommand('Зліт')" class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 px-4 rounded transition">
+                        ↑ Вертикальний зліт (VTOL)
+                    </button>
+                    <button onclick="sendCommand('Перехід')" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded transition">
+                        ✈ Перехід (Літак)
+                    </button>
+                    <button onclick="sendCommand('Повернення')" class="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 px-4 rounded transition">
+                        ⌂ Повернення (RTH)
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-4 rounded-lg shadow-lg flex-grow">
+                <canvas id="flightChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Ініціалізація графіка Chart.js
+        const ctx = document.getElementById('flightChart').getContext('2d');
+        const flightChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Тут буде час
+                datasets: [
+                    {
+                        label: 'Висота (м)',
+                        borderColor: '#22d3ee', // cyan-400
+                        backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                        data: [],
+                        yAxisID: 'y',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Швидкість (км/год)',
+                        borderColor: '#c084fc', // purple-400
+                        data: [],
+                        yAxisID: 'y1',
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                animation: false,
+                responsive: true,
+                maintainAspectRatio: false,
+                color: '#fff',
+                scales: {
+                    x: { ticks: { color: '#9ca3af' } },
+                    y: { 
+                        type: 'linear', display: true, position: 'left', 
+                        title: { display: true, text: 'Висота', color: '#22d3ee' },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    y1: { 
+                        type: 'linear', display: true, position: 'right', 
+                        title: { display: true, text: 'Швидкість', color: '#c084fc' },
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#9ca3af' }
+                    }
+                }
+            }
+        });
+
+        let timeSeconds = 0;
+
+        // Функція зчитування даних з Python-сервера (Інформаційна КІУС)
+        async function fetchTelemetry() {
+            try {
+                const response = await fetch('/api/telemetry');
+                const data = await response.json();
+
+                // Оновлюємо цифри на екрані
+                document.getElementById('val-mode').innerText = data.mode;
+                document.getElementById('val-alt').innerText = data.altitude;
+                document.getElementById('val-speed').innerText = data.speed;
+                document.getElementById('val-battery').innerText = data.battery;
+                document.getElementById('val-temp').innerText = data.motor_temp;
+
+                // Логіка діагностики (Fault Tolerance)
+                const statusIndicator = document.getElementById('global-status');
+                const tempCard = document.getElementById('card-temp');
+
+                if (data.motor_temp >= 90.0) {
+                    statusIndicator.innerText = "УВАГА: ПЕРЕГРІВ!";
+                    statusIndicator.className = "px-6 py-2 rounded text-xl font-bold bg-red-600 animate-bounce";
+                    tempCard.classList.add("bg-red-900");
+                } else {
+                    statusIndicator.innerText = "SYSTEM OK";
+                    statusIndicator.className = "px-6 py-2 rounded text-xl font-bold bg-green-600";
+                    tempCard.classList.remove("bg-red-900");
+                }
+
+                // Додаємо дані на графік
+                timeSeconds++;
+                flightChart.data.labels.push(timeSeconds + 'с');
+                flightChart.data.datasets[0].data.push(data.altitude);
+                flightChart.data.datasets[1].data.push(data.speed);
+
+                // Щоб графік не був безкінечним, обрізаємо старі дані (тримаємо останні 30 точок)
+                if (flightChart.data.labels.length > 30) {
+                    flightChart.data.labels.shift();
+                    flightChart.data.datasets[0].data.shift();
+                    flightChart.data.datasets[1].data.shift();
+                }
+                flightChart.update('none');
+
+            } catch (error) {
+                console.error("Помилка зв'язку з БПЛА:", error);
+            }
+        }
+
+        // Функція відправки команд (Управляюча КІУС)
+        async function sendCommand(cmd) {
+            try {
+                await fetch('/api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: cmd })
+                });
+            } catch (error) {
+                console.error("Помилка відправки команди:", error);
+            }
+        }
+
+        // Запускаємо цикл оновлення телеметрії кожні 1000 мс (1 секунда)
+        setInterval(fetchTelemetry, 1000);
+    </script>
+</body>
+</html>
