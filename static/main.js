@@ -2,7 +2,7 @@
 const map = L.map('map').setView([50.4000, 30.3333], 15); 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
-// Іконка дрона (Світло-сірий військовий колір)
+// Іконка дрона 
 const droneIcon = L.divIcon({ 
     html: `<svg width="30" height="30" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
         <circle cx="20" cy="20" r="4" fill="#9ca3af" stroke="#fff" stroke-width="2"/>
@@ -11,13 +11,13 @@ const droneIcon = L.divIcon({
     </svg>`, className: '', iconSize: [30, 30], iconAnchor: [15, 15] 
 });
 
-// Іконка бази (Тактичний квадрат HQ)
+// Іконка бази 
 const vanIcon = L.divIcon({
     html: '<div style="background: #064e3b; border: 2px solid #10b981; color: #10b981; font-family: monospace; font-size: 10px; line-height: 20px; text-align: center; width: 24px; height: 24px;">HQ</div>',
     className: '', iconSize: [24, 24], iconAnchor: [12, 12]
 });
 
-// Іконка вогню (Тактичний червоний ромб)
+// Іконка вогню 
 const fireIcon = L.divIcon({
     html: '<div class="fire-pulse" style="width: 20px; height: 20px; background: rgba(220, 38, 38, 0.5); border: 2px solid #ef4444; transform: rotate(45deg);"></div>',
     className: '', iconSize: [20, 20], iconAnchor: [10, 10]
@@ -81,7 +81,7 @@ map.on('click', async function(e) {
     }
 });
 
-// ІНІЦІАЛІЗАЦІЯ ГРАФІКА (Військові кольори)
+// ІНІЦІАЛІЗАЦІЯ ГРАФІКА 
 const ctx = document.getElementById('flightChart').getContext('2d');
 const flightChart = new Chart(ctx, {
     type: 'line',
@@ -136,7 +136,7 @@ window.fetchTelemetry = async function() {
             document.getElementById('photo-container').classList.add('hidden');
         }
 
-        // Візуальна діагностика стану (Строгі стилі)
+        // Візуальна діагностика стану 
         const baseClass = "bg-neutral-900 p-3 border border-neutral-700 border-l-4 ";
         
         const modeCard = document.getElementById('card-mode');
